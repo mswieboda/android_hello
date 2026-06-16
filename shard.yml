@@ -1,0 +1,13 @@
+name: android_hello
+version: 0.1.0
+
+authors:
+  - Matt Swieboda <mswieboda@users.noreply.github.com>
+
+targets:
+  android_hello:
+    main: src/main.cr
+
+crystal: '>= 1.20.2'
+
+license: MIT

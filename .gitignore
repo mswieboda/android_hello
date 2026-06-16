@@ -1,0 +1,13 @@
+/docs/
+/lib/
+/bin/
+/build/
+/.shards/
+*.dwarf
+
+# macOS specific ignores
+.DS_Store
+
+# windows specific ignores (crystal version manager)
+/.vfox/
+*.vfox*
