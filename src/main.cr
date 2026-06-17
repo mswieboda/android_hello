@@ -1,3 +1,5 @@
+require "sdl3"
+
 lib LibAndroidLog
   # Bind directly to the NDK log library
   fun write = __android_log_write(prio : Int32, tag : UInt8*, text : UInt8*) : Int32
@@ -90,6 +92,8 @@ lib LibAndroidHelper
 end
 
 fun android_main(app_ptr : Void*)
+  android_log("android_main...")
+
   # Cast the Void* to an AndroidApp*
   app = app_ptr.as(AndroidApp*)
 
@@ -103,108 +107,60 @@ fun android_main(app_ptr : Void*)
   # heartbeat
   counter = 0
 
-  android_log("android_main reached. Starting event loop...")
-
-  loop do
-    # 'ident' tells us which source (e.g., input, command pipe) has an event
-    # 'timeout' is in milliseconds.
-    # Use -1 to wait forever, or a small number (e.g., 16ms for 60fps)
-    # to wake up periodically.
-    source_ptr = uninitialized Void*
-
-    loop do
-      # 16ms timeout (~60 FPS)
-      ident = LibAndroid.a_looper_poll_all(16, nil, nil, pointerof(source_ptr))
-      break if ident < 0 # No more events
-
-      # If it's a command, read it
-      if ident == LibAndroid::LOOPER_ID_MAIN
-        cmd = LibAndroidGlue.android_app_read_cmd(app_ptr)
-
-        if cmd >= 0
-          LibAndroidGlue.android_app_pre_exec_cmd(app_ptr, cmd)
-
-          android_log("processing cmd (after pre_exec): #{cmd} enum: #{LibAndroidGlue::AppCmd.new(cmd)}")
-
-          # Handle the commands
-          case LibAndroidGlue::AppCmd.new(cmd)
-          when .init_window?
-            android_log("Window is initialized!")
-            window_ready = true # Set the flag
-          when .term_window?
-            android_log("Window is being destroyed.")
-            window_ready = false # Clear the flag
-          end
-
-          LibAndroidGlue.android_app_post_exec_cmd(app_ptr, cmd)
-        end
-      end
-    end
-
-    # main game loop
-    # Inside your loop
-    window_ptr = LibAndroidHelper.get_app_window(app_ptr)
-
-    # 1. ONLY draw if window_ready is true AND window_ptr is NOT null
-    if window_ready && window_ptr != nil
-      # android_log("window ready and ptr not nil")
-
-      w, h = 0, 0
-
-      # 1. Prepare a buffer struct
-      buffer = LibAndroidHelper::ANativeWindowBuffer.new
-
-      # 2. Lock the window
-      if LibAndroidHelper.lock_window(window_ptr, pointerof(buffer), nil) == 0
-        # android_log("window locked, and got buffer, set pixels")
-
-        # android_log(">>> Buffer Info: W=#{buffer.width}, H=#{buffer.height}, Stride=#{buffer.stride}, Format=#{buffer.format}")
-
-        # If the width or height are massive, or stride is 0 or a negative number,
-        # your struct definition is misaligned.
-        if buffer.width <= 0 || buffer.stride <= 0 || buffer.width > 4096
-          # android_log("!!! ERROR: Invalid buffer dimensions. Struct definition is likely wrong.")
-          # return
-        end
-
-        pixel_base = buffer.bits.as(UInt8*)
-        # Calculate the total size of the buffer in bytes
-        buffer_size_bytes = buffer.stride * buffer.height * 4
-
-        (0...(buffer.height / 2)).each do |y|
-          row_offset = y * buffer.stride * 4
-
-          # Bounds check: ensure the start of the row is within the buffer
-          if (pixel_base + row_offset).address >= (buffer.bits.as(UInt8*) + buffer_size_bytes).address
-            break
-          end
-
-          row_ptr = (pixel_base + row_offset).as(UInt32*)
-
-          (0...buffer.width).each do |x|
-            # Bounds check: ensure the specific pixel is within the buffer
-            if (pixel_base + row_offset + (x * 4)).address < (buffer.bits.as(UInt8*) + buffer_size_bytes).address
-              row_ptr[x] = 0xFFFF0000_u32
-            end
-          end
-        end
-
-        # android_log("unlock window")
-
-        # 5. Unlock to display the changes
-        LibAndroidHelper.unlock_window(window_ptr)
-      end
-    end
-
-    # Only increment/log here, outside the command processing loop
-    # android_log("check for heartbeat, counter: #{counter}")
-    counter += 1
-    if counter % 100 == 0
-      android_log("heartbeat, counter: #{counter}")
-    end
-
-    # android_log("check to exit: #{LibAndroidHelper.is_destroy_requested(app)}")
-    # Check if we should exit
-    break if LibAndroidHelper.is_destroy_requested(app) != 0
+  android_log "Initializing SDL3..."
+  # try without sdl3_mixer, sdl3_image, sdl3_ttf
+  # put back in scancode, keycode
+  # if SDL3.init(LibSDL3::SDL_INIT_VIDEO) != 0
+  #   android_log("Failed to initialize SDL3: #{SDL3.get_error}")
+  #   return
+  # end
+  result = LibSDL3.init(LibSDL3::SDL_INIT_VIDEO)
+  if result != 0
+    android_log("SDL_Init returned: #{result}")
+    # Manually call LibSDL.get_error if you need to,
+    # but be careful with String allocations!
+    # android_log("Failed to initialize SDL3: #{SDL3.get_error}")
   end
+  android_log "SDL3 Initialized."
+
+  window = nil.as(LibSDL3::Window?)
+  renderer = nil.as(LibSDL3::Renderer?)
+
+  android_log("android_main... Starting event loop...")
+
+  # 2. Main Loop
+  loop do
+    # A. Process Android Events (Keep the app alive)
+    # This prevents the "App Not Responding" (ANR) error
+    event = uninitialized LibSDL3::Event
+    while SDL3.poll_event(pointerof(event))
+      case event.type
+      when LibSDL3::SDL_EVENT_WINDOW_SHOWN
+        if window.nil?
+          android_log "Window shown event received, creating SDL window..."
+          window = LibSDL3.create_window("Hello SDL3".to_unsafe, 480, 640, 0)
+          renderer = LibSDL3.create_renderer(window.not_nil!, Pointer(UInt8).null)
+        end
+      when LibSDL3::SDL_EVENT_QUIT, LibSDL3::SDL_EVENT_WINDOW_CLOSE_REQUESTED
+        puts "Crystal: Quit event received."
+        running = false
+      end
+    end
+
+    # B. Render your frame
+    # (Your existing renderer code here)
+    LibSDL3.set_render_draw_color(renderer.not_nil!, 255_u8, 0_u8, 0_u8, 255_u8)
+    # renderer.draw_color={255_u8, 0_u8, 0_u8, 255_u8}
+    LibSDL3.render_clear(renderer.not_nil!)
+    # renderer.clear
+    LibSDL3.render_present(renderer.not_nil!)
+    # renderer.present
+
+    # C. Check for exit
+    break if LibAndroidHelper.is_destroy_requested(app_ptr) != 0
+  end
+
+  LibSDL3.destroy_gpu_render_state(renderer.not_nil!)
+  LibSDL3.destroy_window(window.not_nil!)
+  SDL3.quit
 end

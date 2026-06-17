@@ -1,4 +1,5 @@
 default: run
+.PHONY: dev apk install run clean clean-libgc clean-sdl3
 
 TARGET = aarch64-linux-android
 API_LEVEL = 33
@@ -17,13 +18,22 @@ VCPKG_LIB_PATH = /Users/matt/ext_libs/vcpkg/installed/arm64-android/lib
 GLUE_SRC = $(NDK_ROOT)/sources/android/native_app_glue/android_native_app_glue.c
 GLUE_INC = $(NDK_ROOT)/sources/android/native_app_glue
 
+SDL3_INSTALL_DIR = build/sdl3_install
+SDL3_LIB = $(SDL3_INSTALL_DIR)/lib/libSDL3.so
+
+# SDL3_FLAGS := $(shell pkg-config --libs sdl3 sdl3-mixer sdl3-image sdl3-ttf 2>/dev/null || echo "-lSDL3 -lSDL3_mixer -lSDL3_image -lSDL3_ttf")
+# CR_LINK_FLAGS := $(SDL3_FLAGS)
+
+# Rule to build SDL3
+$(SDL3_LIB):
+	@echo "Building SDL3..."
+	./build_sdl3.sh
+
 build/android_native_app_glue.o:
 	@echo "Compiling native_app_glue..."
 	$(NDK_CC) --sysroot=$(NDK_SYSROOT) \
 		-c $(GLUE_SRC) -I$(GLUE_INC) \
 		-o build/android_native_app_glue.o
-
-.PHONY: dev apk install run clean clean-libgc
 
 build/libgc.a:
 	@mkdir -p build
@@ -39,7 +49,7 @@ build/bridge.o: src/bridge.c
 build/main.o: src/main.cr
 	@mkdir -p build
 	@echo "Compiling crystal..."
-	CRYSTAL_PATH="$(CRYSTAL_SRC)/lib_c/$(TARGET):$(CRYSTAL_SRC)" \
+	CRYSTAL_PATH="$(CRYSTAL_SRC)/lib_c/$(TARGET):$(CRYSTAL_SRC):$(CURDIR)/lib" \
 	crystal build src/main.cr \
 		--cross-compile \
 		-Dno_debug \
@@ -47,7 +57,7 @@ build/main.o: src/main.cr
 		--target=$(TARGET) \
 		-o build/main.o
 
-$(OUTPUT_LIB): build/android_native_app_glue.o build/bridge.o build/libgc.a build/main.o
+$(OUTPUT_LIB): build/android_native_app_glue.o build/bridge.o build/libgc.a $(SDL3_LIB) build/main.o
 	@mkdir -p $(OUTPUT_DIR)
 	@echo "Compiling NDK combo..."
 	$(NDK_CC) -shared \
@@ -56,10 +66,13 @@ $(OUTPUT_LIB): build/android_native_app_glue.o build/bridge.o build/libgc.a buil
 		build/android_native_app_glue.o \
 		build/bridge.o \
 		-L./build \
+		-L$(SDL3_INSTALL_DIR)/lib \
+		-lSDL3 \
 		-Wl,--whole-archive -lgc -Wl,--no-whole-archive \
 		$(NDK_LIB_DIR)/liblog.so \
 		-landroid \
 		-o $(OUTPUT_LIB)
+	cp $(SDL3_LIB) $(OUTPUT_DIR)/
 
 dev: $(OUTPUT_LIB)
 
@@ -80,3 +93,8 @@ clean:
 
 clean-libgc:
 	rm -rf build/libgc.a
+
+clean-sdl3:
+	rm -rf build/sdl3
+	rm -rf build/sdl3_install
+

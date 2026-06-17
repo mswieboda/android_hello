@@ -8,6 +8,16 @@ targets:
   android_hello:
     main: src/main.cr
 
+dependencies:
+  sdl3:
+    # github: mswieboda/sdl3.cr
+    # version: "~> 0.51.5"
+    path: ../sdl3
+  stb_truetype:
+    github: mswieboda/stb_truetype.cr
+    version: "~> 1.0.0"
+    # path: ../stb_truetype.cr
+
 crystal: '>= 1.20.2'
 
 license: MIT
