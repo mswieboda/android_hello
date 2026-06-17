@@ -14,6 +14,15 @@ NDK_CC = $(NDK_ROOT)/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-an
 # Define the path to the vcpkg-built library
 VCPKG_LIB_PATH = /Users/matt/ext_libs/vcpkg/installed/arm64-android/lib
 
+GLUE_SRC = $(NDK_ROOT)/sources/android/native_app_glue/android_native_app_glue.c
+GLUE_INC = $(NDK_ROOT)/sources/android/native_app_glue
+
+build/android_native_app_glue.o:
+	@echo "Compiling native_app_glue..."
+	$(NDK_CC) --sysroot=$(NDK_SYSROOT) \
+		-c $(GLUE_SRC) -I$(GLUE_INC) \
+		-o build/android_native_app_glue.o
+
 .PHONY: dev apk install run clean clean-libgc
 
 build/libgc.a:
@@ -22,10 +31,13 @@ build/libgc.a:
 	vcpkg install bdwgc:arm64-android
 	cp $(VCPKG_LIB_PATH)/libgc.a build/libgc.a
 
-$(OUTPUT_LIB): build/libgc.a
-	@mkdir -p build
-	@mkdir -p $(OUTPUT_DIR)
+build/bridge.o: src/bridge.c
+	$(NDK_CC) --sysroot=$(NDK_SYSROOT) \
+		-c src/bridge.c -I$(GLUE_INC) \
+		-o build/bridge.o
 
+build/main.o: src/main.cr
+	@mkdir -p build
 	@echo "Compiling crystal..."
 	CRYSTAL_PATH="$(CRYSTAL_SRC)/lib_c/$(TARGET):$(CRYSTAL_SRC)" \
 	crystal build src/main.cr \
@@ -35,13 +47,18 @@ $(OUTPUT_LIB): build/libgc.a
 		--target=$(TARGET) \
 		-o build/main.o
 
+$(OUTPUT_LIB): build/android_native_app_glue.o build/bridge.o build/libgc.a build/main.o
+	@mkdir -p $(OUTPUT_DIR)
 	@echo "Compiling NDK combo..."
 	$(NDK_CC) -shared \
 		--sysroot=$(NDK_SYSROOT) \
 		build/main.o \
+		build/android_native_app_glue.o \
+		build/bridge.o \
 		-L./build \
 		-Wl,--whole-archive -lgc -Wl,--no-whole-archive \
 		$(NDK_LIB_DIR)/liblog.so \
+		-landroid \
 		-o $(OUTPUT_LIB)
 
 dev: $(OUTPUT_LIB)
