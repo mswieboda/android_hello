@@ -2,7 +2,7 @@ version: 2.0
 shards:
   sdl3:
     git: https://github.com/mswieboda/sdl3.cr.git
-    version: 0.51.6
+    version: 0.51.7
 
   stb_truetype:
     git: https://github.com/mswieboda/stb_truetype.cr.git

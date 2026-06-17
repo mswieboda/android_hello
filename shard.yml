@@ -11,7 +11,7 @@ targets:
 dependencies:
   sdl3:
     github: mswieboda/sdl3.cr
-    version: "~> 0.51.6"
+    version: "~> 0.51.7"
     # path: ../sdl3
   stb_truetype:
     github: mswieboda/stb_truetype.cr

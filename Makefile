@@ -1,5 +1,5 @@
 default: run
-.PHONY: ensure_sources dev apk install run clean clean-libs clean-all nuke
+.PHONY: ensure_sources dev copy_assets apk install run clean clean-libs clean-all nuke
 
 TARGET = aarch64-linux-android
 API_LEVEL = 33
@@ -28,6 +28,9 @@ SDL3_LIB           = $(SDL3_INSTALL_DIR)/lib/libSDL3.so
 SDL3_IMAGE_LIB     = $(SDL3_INSTALL_DIR)/lib/libSDL3_image.so
 SDL3_MIXER_LIB     = $(SDL3_INSTALL_DIR)/lib/libSDL3_mixer.so
 SDL3_TTF_LIB       = $(SDL3_INSTALL_DIR)/lib/libSDL3_ttf.so
+
+ASSETS_SRC := assets/.
+ASSETS_DST := android/app/src/main/assets/
 
 $(SDL3_LIB):
 	@# 1. Run the safe, microsecond-fast directory check right here inline
@@ -106,13 +109,21 @@ $(OUTPUT_LIB): build/bridge.o build/libgc.a $(SDL3_LIB) $(SDL3_IMAGE_LIB) $(SDL3
 
 dev: $(OUTPUT_LIB)
 
-apk: dev
+copy_assets:
+	@echo "Copying assets to Android project..."
+	@mkdir -p $(ASSETS_DST)
+	cp -r $(ASSETS_SRC) $(ASSETS_DST)
+
+apk: dev copy_assets
+	@echo "Gradle assembleDebug..."
 	cd android && ./gradlew assembleDebug
 
 install: apk
+	@echo "Gradle installDebug..."
 	cd android && ./gradlew installDebug
 
-run:
+run: install
+	@echo "Start Android MainActivity on an emulator..."
 	adb shell am start -n com.mswieboda.hello/com.mswieboda.hello.MainActivity
 
 # Standard clean: Fast, safe, preserves ALL cache, downloads, and compiled libraries.
