@@ -1,0 +1,29 @@
+plugins {
+    id 'com.android.application' version '8.8.0'
+}
+
+android {
+    namespace 'com.mswieboda.hello'
+    compileSdk 33
+
+    defaultConfig {
+        applicationId "com.mswieboda.hello"
+        minSdk 33
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+            java.srcDirs = []
+        }
+    }
+}

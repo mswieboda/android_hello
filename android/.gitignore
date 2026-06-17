@@ -1,0 +1,9 @@
+# Android build output
+app/build/
+.gradle/
+
+# Machine-specific Android SDK configuration
+local.properties
+
+# IntelliJ config
+.idea
