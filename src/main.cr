@@ -125,38 +125,45 @@ fun android_main(app_ptr : Void*)
 
   window = nil.as(LibSDL3::Window?)
   renderer = nil.as(LibSDL3::Renderer?)
+  waiting_counter = 0
 
   android_log("android_main... Starting event loop...")
 
-  # 2. Main Loop
   loop do
-    # A. Process Android Events (Keep the app alive)
-    # This prevents the "App Not Responding" (ANR) error
-    event = uninitialized LibSDL3::Event
-    while SDL3.poll_event(pointerof(event))
+    event = LibSDL3::Event.new
+    android_log("pre poll_event")
+
+    result = LibSDL3.poll_event(pointerof(event))
+    android_log("poll_event result: #{result}")
+
+    while result != 0
+      android_log("poll_event event.type: #{event.type}")
+
       case event.type
       when LibSDL3::SDL_EVENT_WINDOW_SHOWN
+        android_log "Event: Window Shown!"
         if window.nil?
-          android_log "Window shown event received, creating SDL window..."
-          window = LibSDL3.create_window("Hello SDL3".to_unsafe, 480, 640, 0)
-          renderer = LibSDL3.create_renderer(window.not_nil!, Pointer(UInt8).null)
+          window = LibSDL3.create_window("Hello", 640, 480, 0)
+          renderer = LibSDL3.create_renderer(window, Pointer(UInt8).null)
         end
-      when LibSDL3::SDL_EVENT_QUIT, LibSDL3::SDL_EVENT_WINDOW_CLOSE_REQUESTED
-        puts "Crystal: Quit event received."
-        running = false
+      when LibSDL3::SDL_EVENT_QUIT
+        break
       end
     end
 
-    # B. Render your frame
-    # (Your existing renderer code here)
-    LibSDL3.set_render_draw_color(renderer.not_nil!, 255_u8, 0_u8, 0_u8, 255_u8)
-    # renderer.draw_color={255_u8, 0_u8, 0_u8, 255_u8}
-    LibSDL3.render_clear(renderer.not_nil!)
-    # renderer.clear
-    LibSDL3.render_present(renderer.not_nil!)
-    # renderer.present
+    if !window.nil? && !renderer.nil?
+      LibSDL3.set_render_draw_color(renderer, 255, 0, 0, 255) # Red
+      LibSDL3.render_clear(renderer)
+      LibSDL3.render_present(renderer)
+    else
+      waiting_counter += 1
+      android_log("Waiting for window... #{waiting_counter}") if waiting_counter % 100 == 0
+    end
 
-    # C. Check for exit
+    # Tiny sleep to prevent 100% CPU usage
+    Fiber.yield
+
+    # check for exit
     break if LibAndroidHelper.is_destroy_requested(app_ptr) != 0
   end
 
