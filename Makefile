@@ -15,25 +15,30 @@ NDK_CC = $(NDK_ROOT)/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-an
 # Define the path to the vcpkg-built library
 VCPKG_LIB_PATH = /Users/matt/ext_libs/vcpkg/installed/arm64-android/lib
 
-GLUE_SRC = $(NDK_ROOT)/sources/android/native_app_glue/android_native_app_glue.c
+# GLUE_SRC = $(NDK_ROOT)/sources/android/native_app_glue/android_native_app_glue.c
 GLUE_INC = $(NDK_ROOT)/sources/android/native_app_glue
 
 SDL3_INSTALL_DIR = build/sdl3_install
 SDL3_LIB = $(SDL3_INSTALL_DIR)/lib/libSDL3.so
+SDL3_INC = $(SDL3_INSTALL_DIR)/include
 
-# SDL3_FLAGS := $(shell pkg-config --libs sdl3 sdl3-mixer sdl3-image sdl3-ttf 2>/dev/null || echo "-lSDL3 -lSDL3_mixer -lSDL3_image -lSDL3_ttf")
-# CR_LINK_FLAGS := $(SDL3_FLAGS)
+SDL3_SRC_DIR = /Users/matt/ext_libs/SDL
+JAVA_TARGET_DIR = android/app/src/main/java/org/libsdl/app
 
-# Rule to build SDL3
 $(SDL3_LIB):
 	@echo "Building SDL3..."
 	./build_sdl3.sh
 
-build/android_native_app_glue.o:
-	@echo "Compiling native_app_glue..."
-	$(NDK_CC) --sysroot=$(NDK_SYSROOT) \
-		-c $(GLUE_SRC) -I$(GLUE_INC) \
-		-o build/android_native_app_glue.o
+sync-sdl-java:
+	@echo "Copying SDL3 Java source files..."
+	@mkdir -p $(JAVA_TARGET_DIR)
+	@cp -R $(SDL3_SRC_DIR)/android-project/app/src/main/java/org/libsdl/app/. $(JAVA_TARGET_DIR)/
+
+# build/android_native_app_glue.o:
+# 	@echo "Compiling native_app_glue..."
+# 	$(NDK_CC) --sysroot=$(NDK_SYSROOT) \
+# 		-c $(GLUE_SRC) -I$(GLUE_INC) \
+# 		-o build/android_native_app_glue.o
 
 build/libgc.a:
 	@mkdir -p build
@@ -41,9 +46,17 @@ build/libgc.a:
 	vcpkg install bdwgc:arm64-android
 	cp $(VCPKG_LIB_PATH)/libgc.a build/libgc.a
 
-build/bridge.o: src/bridge.c
+# build/bridge.o: src/bridge.c
+# 	$(NDK_CC) --sysroot=$(NDK_SYSROOT) \
+# 		-c src/bridge.c -I$(GLUE_INC) \
+# 		-o build/bridge.o
+build/bridge.o: src/bridge.c $(SDL3_LIB)
+	@mkdir -p build
+	@echo "Compiling C bridge with SDL3 entry points..."
 	$(NDK_CC) --sysroot=$(NDK_SYSROOT) \
-		-c src/bridge.c -I$(GLUE_INC) \
+		-c src/bridge.c \
+		-I$(GLUE_INC) \
+		-I$(SDL3_INC) \
 		-o build/bridge.o
 
 build/main.o: src/main.cr
@@ -57,13 +70,14 @@ build/main.o: src/main.cr
 		--target=$(TARGET) \
 		-o build/main.o
 
-$(OUTPUT_LIB): build/android_native_app_glue.o build/bridge.o build/libgc.a $(SDL3_LIB) build/main.o
+# $(OUTPUT_LIB): build/android_native_app_glue.o build/bridge.o build/libgc.a $(SDL3_LIB) build/main.o
+# build/android_native_app_glue.o (was added to list below after build/main.o)
+$(OUTPUT_LIB): build/bridge.o build/libgc.a $(SDL3_LIB) build/main.o
 	@mkdir -p $(OUTPUT_DIR)
 	@echo "Compiling NDK combo..."
 	$(NDK_CC) -shared \
 		--sysroot=$(NDK_SYSROOT) \
 		build/main.o \
-		build/android_native_app_glue.o \
 		build/bridge.o \
 		-L./build \
 		-L$(SDL3_INSTALL_DIR)/lib \
@@ -76,14 +90,15 @@ $(OUTPUT_LIB): build/android_native_app_glue.o build/bridge.o build/libgc.a $(SD
 
 dev: $(OUTPUT_LIB)
 
-apk: dev
+apk: dev sync-sdl-java
 	cd android && ./gradlew assembleDebug
 
 install: apk
 	cd android && ./gradlew installDebug
 
 run: install
-	adb shell am start -n com.mswieboda.hello/android.app.NativeActivity
+	adb shell am start -n com.mswieboda.hello/org.libsdl.app.SDLActivity
+# 	adb shell am start -n com.mswieboda.hello/android.app.NativeActivity
 
 # don't do build/libgc.a
 clean:

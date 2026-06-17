@@ -1,31 +1,25 @@
-#include <android_native_app_glue.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
+#include <android/log.h>
 
-int is_destroy_requested(struct android_app* app) {
-    return app->destroyRequested;
-}
+// Tell Android's logcat who is talking
+#define LOG_TAG "GSDL_Bridge"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
-void* get_app_window(struct android_app* app) {
-    return app->window;
-}
+// Declare the game loop function that you will implement in Crystal
+extern int crystal_game_main(void);
 
-void* get_poll_source_process_func(struct android_poll_source* source) {
-    return (void*)source->process;
-}
+/*
+ * This is the signature SDL3 expects on Android.
+ * Including <SDL3/SDL_main.h> ensures that when Java starts the application,
+ * it safely routes through SDL3's initialization layer and lands right here.
+ */
+int main(int argc, char *argv[]) {
+    LOGI("SDL3 Java layer handshake successful. Handoff to Crystal...");
 
-void call_process_func(struct android_poll_source* source, struct android_app* app) {
-    source->process(app, source);
-}
+    // Call your game loop written in Crystal
+    int result = crystal_game_main();
 
-void* lock_window_and_get_pixels(ANativeWindow* window, int32_t* out_width, int32_t* out_height) {
-    ANativeWindow_Buffer buffer;
-    if (ANativeWindow_lock(window, &buffer, NULL) == 0) {
-        *out_width = buffer.width;
-        *out_height = buffer.height;
-        return buffer.bits;
-    }
-    return NULL;
-}
-
-void unlock_window(ANativeWindow* window) {
-    ANativeWindow_unlockAndPost(window);
+    LOGI("Crystal game loop finished with exit code: %d", result);
+    return result;
 }

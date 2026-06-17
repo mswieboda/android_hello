@@ -11,163 +11,78 @@ def android_log(message : String)
   LibAndroidLog.write(4, "CrystalGame".to_unsafe, ">>> #{message}".to_unsafe)
 end
 
-@[Link("android")]
-lib LibAndroid
-  # The value is defined as 1 in the NDK
-  LOOPER_ID_MAIN = 1
-  LOOPER_ID_INPUT = 2
+fun crystal_game_main : Int32
+  android_log("Crystal has taken control inside the game loop!")
 
-  # ALooper_pollAll arguments:
-  # timeoutMillis: Int32 (-1 to wait indefinitely)
-  # outFd: Int32* (returns the file descriptor, or nil if not needed)
-  # outEvents: Int32* (returns the events, or nil if not needed)
-  # outData: Void** (returns the data pointer, or nil if not needed)
-  fun a_looper_poll_all = ALooper_pollAll(
-    timeoutMillis : Int32,
-    outFd : Int32*,
-    outEvents : Int32*,
-    outData : Void**
-  ) : Int32
-end
-
-@[Extern]
-struct AndroidApp
-  # NOTE: not working to map things, using the bridge helper for now
-end
-
-@[Packed]
-@[Extern]
-struct AndroidPollSource
-  id : Int32
-  app : Void*
-  process : (Void*, Void*) -> Void
-end
-
-# This doesn't need @[Link] because you are linking the .o file
-lib LibAndroidGlue
-  enum AppCmd : Int32
-    INPUT_CHANGED       = 0
-    INIT_WINDOW         = 1
-    TERM_WINDOW         = 2
-    WINDOW_RESIZED      = 3
-    WINDOW_REDRAW_NEEDED= 4
-    CONTENT_RECT_CHANGED= 5
-    GAINED_FOCUS        = 6
-    LOST_FOCUS          = 7
-    CONFIG_CHANGED      = 8
-    LOW_MEMORY          = 9
-    START               = 10
-    RESUME              = 11
-    SAVE_STATE          = 12
-    PAUSE               = 13
-    STOP                = 14
-    DESTROY             = 15
+  # Initialize SDL3 (Video is already attached by the SDL3 Android subsystem)
+  if !LibSDL3.init(LibSDL3::SDL_INIT_VIDEO)
+    android_log("SDL_Init Failed")
+    # Add get_error to find out exactly why it failed!
+    error_msg = String.new(LibSDL3.get_error)
+    android_log(">>> SDL_Init Failed: #{error_msg}")
+    return 1
   end
+  android_log("SDL_Init successfully returned true!")
 
-  fun android_app_read_cmd = android_app_read_cmd(app : Void*) : Int8
-  fun android_app_pre_exec_cmd = android_app_pre_exec_cmd(app : Void*, cmd : Int8)
-  fun android_app_post_exec_cmd = android_app_post_exec_cmd(app : Void*, cmd : Int8)
-end
-
-# Bind the C helper functions
-lib LibAndroidHelper
-  @[Packed]
-  @[Extern(union: false)]
-  struct ANativeWindowBuffer
-    width  : Int32
-    height : Int32
-    stride : Int32
-    format : Int32
-    bits   : Void*
-    reserved : UInt32[6]
+  # Pump events for a few cycles to let Android initialize the surface
+  # and send window size events over to SDL's native backend.
+  5.times do
+    LibSDL3.pump_events
+    LibSDL3.delay(16)
   end
+  android_log("Initial event pumping completed.")
 
-  fun is_destroy_requested(app : Void*) : Int32
-  fun get_poll_source_process_func(source : Void*) : Void*
-  fun call_process_func(source : Void*, app : Void*)
-  fun lock_window = ANativeWindow_lock(window : Void*, out_buffer : ANativeWindowBuffer*, dirty_bounds : Void*) : Int32
-  fun unlock_window = ANativeWindow_unlockAndPost(window : Void*) : Int32
-  fun lock_window_and_get_pixels = lock_window_and_get_pixels(window : Void*, out_width : Int32*, out_height : Int32*) : Void*
-  fun get_app_window = get_app_window(app : Void*) : Void*
-end
-
-fun android_main(app_ptr : Void*)
-  android_log("android_main...")
-
-  # Cast the Void* to an AndroidApp*
-  app = app_ptr.as(AndroidApp*)
-
-  window_ready = false
-
-  # Variables to hold the output from the poll function
-  out_fd = 0
-  out_events = 0
-  source_data = pointerof(out_fd) # Just placeholders for the poll
-
-  # heartbeat
-  counter = 0
-
-  android_log "Initializing SDL3..."
-  # try without sdl3_mixer, sdl3_image, sdl3_ttf
-  # put back in scancode, keycode
-  # if SDL3.init(LibSDL3::SDL_INIT_VIDEO) != 0
-  #   android_log("Failed to initialize SDL3: #{SDL3.get_error}")
-  #   return
-  # end
-  result = LibSDL3.init(LibSDL3::SDL_INIT_VIDEO)
-  if result != 0
-    android_log("SDL_Init returned: #{result}")
-    # Manually call LibSDL.get_error if you need to,
-    # but be careful with String allocations!
-    # android_log("Failed to initialize SDL3: #{SDL3.get_error}")
+  # Create your window and renderer
+  # Android completely ignores the width/height parameters and forces fullscreen
+  window = LibSDL3.create_window("GSDL Game", 0, 0, LibSDL3::SDL_WINDOW_FULLSCREEN)
+  if window.nil?
+    android_log("Failed to create window")
+    return 1
   end
-  android_log "SDL3 Initialized."
+  android_log("Window created successfully at memory pointer location.")
 
-  window = nil.as(LibSDL3::Window?)
-  renderer = nil.as(LibSDL3::Renderer?)
-  waiting_counter = 0
+  renderer = LibSDL3.create_renderer(window, nil)
+  if renderer.nil?
+    android_log("Failed to create renderer")
+    return 1
+  end
+  android_log("Renderer created successfully.")
 
-  android_log("android_main... Starting event loop...")
+  # Standard game loop
+  running = true
+  event = uninitialized LibSDL3::Event
+  frame_count = 0
 
-  loop do
-    event = LibSDL3::Event.new
-    android_log("pre poll_event")
-
-    result = LibSDL3.poll_event(pointerof(event))
-    android_log("poll_event result: #{result}")
-
-    while result != 0
-      android_log("poll_event event.type: #{event.type}")
-
-      case event.type
-      when LibSDL3::SDL_EVENT_WINDOW_SHOWN
-        android_log "Event: Window Shown!"
-        if window.nil?
-          window = LibSDL3.create_window("Hello", 640, 480, 0)
-          renderer = LibSDL3.create_renderer(window, Pointer(UInt8).null)
-        end
-      when LibSDL3::SDL_EVENT_QUIT
-        break
+  while running
+    while LibSDL3.poll_event(pointerof(event))
+      if event.type == LibSDL3::SDL_EVENT_QUIT
+        android_log("Received Quit Event!")
+        running = false
       end
     end
 
-    if !window.nil? && !renderer.nil?
-      LibSDL3.set_render_draw_color(renderer, 255, 0, 0, 255) # Red
-      LibSDL3.render_clear(renderer)
-      LibSDL3.render_present(renderer)
-    else
-      waiting_counter += 1
-      android_log("Waiting for window... #{waiting_counter}") if waiting_counter % 100 == 0
+    # Track if drawing commands actually succeed
+    color_ok = LibSDL3.set_render_draw_color(renderer, 255_u8, 0_u8, 0_u8, 255_u8)
+    clear_ok = LibSDL3.render_clear(renderer)
+    present_ok = LibSDL3.render_present(renderer)
+
+    # Log only the first 3 frames to avoid absolutely flooding your logcat
+    if frame_count < 3
+      android_log("Frame ##{frame_count}: Color OK: #{color_ok}, Clear OK: #{clear_ok}, Present OK: #{present_ok}")
+      if !color_ok || !clear_ok || !present_ok
+        android_log("Render Error: #{String.new(LibSDL3.get_error)}")
+      end
+      frame_count += 1
     end
 
-    # Tiny sleep to prevent 100% CPU usage
-    Fiber.yield
-
-    # check for exit
-    break if LibAndroidHelper.is_destroy_requested(app_ptr) != 0
+    LibSDL3.delay(16)
   end
 
-  LibSDL3.destroy_gpu_render_state(renderer.not_nil!)
-  LibSDL3.destroy_window(window.not_nil!)
-  SDL3.quit
+  # Cleanup
+  android_log("Shutting down SDL3...")
+  LibSDL3.destroy_renderer(renderer)
+  LibSDL3.destroy_window(window)
+  LibSDL3.quit
+
+  return 0
 end
