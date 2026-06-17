@@ -11,3 +11,6 @@ local.properties
 
 # specific build output for crystal .so files, and maybe others
 app/src/main/jniLibs/arm64-v8a/
+
+# Ignore automatically synced SDL3 Java framework files
+app/src/main/java/org/libsdl/app/

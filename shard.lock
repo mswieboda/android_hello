@@ -1,8 +1,8 @@
 version: 2.0
 shards:
   sdl3:
-    path: ../sdl3
-    version: 0.51.5
+    git: https://github.com/mswieboda/sdl3.cr.git
+    version: 0.51.6
 
   stb_truetype:
     git: https://github.com/mswieboda/stb_truetype.cr.git

@@ -26,4 +26,16 @@ android {
             java.srcDirs = ['src/main/java']
         }
     }
+
+    tasks.register('compileCrystal', Exec) {
+        workingDir '../../' // Adjust this so it points to the root directory where your Makefile lives
+        commandLine 'make', 'dev'
+    }
+
+    // Make sure Gradle always forces a Crystal compile before compiling any Java/Kotlin files
+    project.afterEvaluate {
+        tasks.named('preBuild').configure {
+            dependsOn compileCrystal
+        }
+    }
 }

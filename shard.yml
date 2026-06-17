@@ -10,9 +10,9 @@ targets:
 
 dependencies:
   sdl3:
-    # github: mswieboda/sdl3.cr
-    # version: "~> 0.51.5"
-    path: ../sdl3
+    github: mswieboda/sdl3.cr
+    version: "~> 0.51.6"
+    # path: ../sdl3
   stb_truetype:
     github: mswieboda/stb_truetype.cr
     version: "~> 1.0.0"

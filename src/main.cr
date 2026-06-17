@@ -16,13 +16,13 @@ fun crystal_game_main : Int32
 
   # Initialize SDL3 (Video is already attached by the SDL3 Android subsystem)
   if !LibSDL3.init(LibSDL3::SDL_INIT_VIDEO)
-    android_log("SDL_Init Failed")
+    android_log("SDL3 init Failed")
     # Add get_error to find out exactly why it failed!
     error_msg = String.new(LibSDL3.get_error)
-    android_log(">>> SDL_Init Failed: #{error_msg}")
+    android_log("SDL3 init Failed: #{error_msg}")
     return 1
   end
-  android_log("SDL_Init successfully returned true!")
+  android_log("SDL3 init successfully")
 
   # Pump events for a few cycles to let Android initialize the surface
   # and send window size events over to SDL's native backend.
@@ -91,7 +91,7 @@ fun crystal_game_main : Int32
   android_log("Shutting down SDL3...")
   LibSDL3.destroy_renderer(renderer)
   LibSDL3.destroy_window(window)
-  LibSDL3.quit
+  SDL3.quit
 
   return 0
 end

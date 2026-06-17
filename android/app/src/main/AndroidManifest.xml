@@ -10,10 +10,12 @@
     android:icon="@android:drawable/sym_def_app_icon">
 
     <activity
-      android:name="org.libsdl.app.SDLActivity"
-      android:exported="true"
-      android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|density"
-      android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+      android:name="com.mswieboda.hello.MainActivity"
+      android:label="hello sdl3.cr"
+      android:alwaysRetainTaskState="true"
+      android:launchMode="singleInstance"
+      android:configChanges="orientation|keyboardHidden|screenSize"
+      android:exported="true">
 
       <meta-data android:name="SDL_ENV_UNIVERSAL_SO" android:value="main" />
 
