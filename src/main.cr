@@ -51,7 +51,18 @@ fun crystal_game_main : Int32
   # Standard game loop
   running = true
   event = uninitialized LibSDL3::Event
-  frame_count = 0
+
+  # Define the square's dimensions
+  rect_width = 300.0_f32
+  rect_height = 300.0_f32
+
+  # Android window size from your logs is 1080x2424
+  # Calculate center positioning dynamically
+  rect_x = (1080.0_f32 - rect_width) / 2.0_f32
+  rect_y = (2424.0_f32 - rect_height) / 2.0_f32
+
+  # Create the SDL3 Floating-point Rectangle structure
+  square = LibSDL3::FRect.new(x: rect_x, y: rect_y, w: rect_width, h: rect_height)
 
   while running
     while LibSDL3.poll_event(pointerof(event))
@@ -61,20 +72,18 @@ fun crystal_game_main : Int32
       end
     end
 
-    # Track if drawing commands actually succeed
-    color_ok = LibSDL3.set_render_draw_color(renderer, 255_u8, 0_u8, 0_u8, 255_u8)
-    clear_ok = LibSDL3.render_clear(renderer)
-    present_ok = LibSDL3.render_present(renderer)
+    # clear
+    LibSDL3.set_render_draw_color(renderer, 255_u8, 0_u8, 0_u8, 255_u8)
+    LibSDL3.render_clear(renderer)
 
-    # Log only the first 3 frames to avoid absolutely flooding your logcat
-    if frame_count < 3
-      android_log("Frame ##{frame_count}: Color OK: #{color_ok}, Clear OK: #{clear_ok}, Present OK: #{present_ok}")
-      if !color_ok || !clear_ok || !present_ok
-        android_log("Render Error: #{String.new(LibSDL3.get_error)}")
-      end
-      frame_count += 1
-    end
+    # draw
+    LibSDL3.set_render_draw_color(renderer, 200, 200, 200, 255) # Light Grey
+    LibSDL3.render_fill_rect(renderer, pointerof(square))
 
+    # present
+    LibSDL3.render_present(renderer)
+
+    # delay, to limit FPS (to about 60 FPS)
     LibSDL3.delay(16)
   end
 
