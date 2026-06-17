@@ -11,6 +11,10 @@ end
 
 @[Link("android")]
 lib LibAndroid
+  # The value is defined as 1 in the NDK
+  LOOPER_ID_MAIN = 1
+  LOOPER_ID_INPUT = 2
+
   # ALooper_pollAll arguments:
   # timeoutMillis: Int32 (-1 to wait indefinitely)
   # outFd: Int32* (returns the file descriptor, or nil if not needed)
@@ -71,64 +75,48 @@ fun android_main(app_ptr : Void*)
   android_log("android_main reached. Starting event loop...")
 
   loop do
-    android_log("top of event loop...")
-
     # 'ident' tells us which source (e.g., input, command pipe) has an event
     # 'timeout' is in milliseconds.
     # Use -1 to wait forever, or a small number (e.g., 16ms for 60fps)
     # to wake up periodically.
     source_ptr = uninitialized Void*
-    ident = LibAndroid.a_looper_poll_all(
-      16,        # 16ms timeout (~60 FPS)
-      nil, nil,
-      pointerof(source_ptr)
-    )
 
-    # 1. If we got a source (pipe or input), process it
-    if ident >= 0 && source_ptr
-      android_log("got a source, process it")
-      LibAndroidHelper.call_process_func(source_ptr, app_ptr)
-    end
+    loop do
+      # 16ms timeout (~60 FPS)
+      ident = LibAndroid.a_looper_poll_all(16, nil, nil, pointerof(source_ptr))
+      break if ident < 0 # No more events
 
-    # 2. Read commands (now that we know there is something to read)
-    android_log("read commands")
-    cmd = LibAndroidGlue.android_app_read_cmd(app_ptr)
-    if cmd >= 0
-      android_log("pre_exec cmd")
-      LibAndroidGlue.android_app_pre_exec_cmd(app_ptr, cmd)
+      # If it's a command, read it
+      if ident == LibAndroid::LOOPER_ID_MAIN
+        cmd = LibAndroidGlue.android_app_read_cmd(app_ptr)
 
-      android_log("handle cmds")
-      # Handle the command
-      case cmd
-      when 0 # APP_CMD_INIT_WINDOW
-        android_log("Window is initialized! We can draw now.")
-      when 2 # APP_CMD_RESUME
-        android_log("App resumed.")
+        android_log("processing cmd: #{cmd}")
+
+        if cmd >= 0
+          LibAndroidGlue.android_app_pre_exec_cmd(app_ptr, cmd)
+
+          # Handle the commands
+          case cmd
+          when 0 # APP_CMD_INIT_WINDOW
+            android_log("Window is initialized! We can draw now.")
+          when 2 # APP_CMD_RESUME
+            android_log("App resumed.")
+          end
+
+          LibAndroidGlue.android_app_post_exec_cmd(app_ptr, cmd)
+        end
       end
-
-      android_log("post_exec cmd")
-      LibAndroidGlue.android_app_post_exec_cmd(app_ptr, cmd)
     end
 
-    android_log("post_exec cmd again (is this needed?)")
-    # Post-processing handles cleanup
-    LibAndroidGlue.android_app_post_exec_cmd(app_ptr, cmd)
+    # Only increment/log here, outside the command processing loop
+    # android_log("check for heartbeat, counter: #{counter}")
+    counter += 1
+    if counter % 100 == 0
+      android_log("heartbeat, counter: #{counter}")
+    end
 
-    android_log("check to exit: #{LibAndroidHelper.is_destroy_requested(app)}")
+    # android_log("check to exit: #{LibAndroidHelper.is_destroy_requested(app)}")
     # Check if we should exit
     break if LibAndroidHelper.is_destroy_requested(app) != 0
-
-    android_log("increment counter")
-
-    # Increment counter
-    counter += 1
-
-    android_log("check for heartbeat, counter: #{counter}")
-
-    # heartbeat
-    # Only log every 1,000,000 iterations (approx. every few seconds)
-    if counter % 1_000_000 == 0
-      android_log("heartbeat: Event loop is running...")
-    end
   end
 end
