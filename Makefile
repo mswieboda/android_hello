@@ -1,6 +1,14 @@
 default: run
 .PHONY: ensure_sources dev copy_assets apk install run clean clean-libs clean-all nuke
 
+# stb_truetype android overrides
+STB_TRUETYPE_DIR ?= lib/stb_truetype
+
+# FORCE the third-party .mk file to use your NDK cross-compiler and sysroot!
+$(STB_TRUETYPE_DIR)/src/stb_truetype.o: CC=$(NDK_CC) --sysroot=$(NDK_SYSROOT)
+
+-include $(STB_TRUETYPE_DIR)/stb_truetype.mk
+
 TARGET = aarch64-linux-android
 API_LEVEL = 33
 OUTPUT_DIR = android/app/src/main/jniLibs/arm64-v8a
@@ -66,6 +74,24 @@ build/libgc.a:
 	vcpkg install bdwgc:arm64-android
 	cp $(VCPKG_LIB_PATH)/libgc.a build/libgc.a
 
+build/libpcre2.a:
+	@mkdir -p build
+	@echo "Installing pcre2 from vcpkg..."
+	vcpkg install pcre2:arm64-android
+	cp $(VCPKG_LIB_PATH)/libpcre2-8.a build/libpcre2.a
+
+build/libxml2.a:
+	@mkdir -p build
+	@echo "Installing libxml2 from vcpkg..."
+	vcpkg install libxml2:arm64-android
+	cp $(VCPKG_LIB_PATH)/libxml2.a build/libxml2.a
+
+build/libyaml.a:
+	@mkdir -p build
+	@echo "Installing libyaml from vcpkg..."
+	vcpkg install libyaml:arm64-android
+	cp $(VCPKG_LIB_PATH)/libyaml.a build/libyaml.a
+
 build/bridge.o: src/bridge.c $(SDL3_LIB)
 	@mkdir -p build
 	@echo "Compiling C bridge with SDL3 entry points..."
@@ -86,22 +112,24 @@ build/main.o: src/main.cr
 		-o build/main.o
 
 # Add the new libraries to the dependency line
-$(OUTPUT_LIB): build/bridge.o build/libgc.a $(SDL3_LIB) $(SDL3_IMAGE_LIB) $(SDL3_MIXER_LIB) $(SDL3_TTF_LIB) build/main.o
+$(OUTPUT_LIB): build/libgc.a build/libpcre2.a build/libxml2.a build/libyaml.a build/bridge.o $(SDL3_LIB) $(SDL3_IMAGE_LIB) $(SDL3_MIXER_LIB) $(SDL3_TTF_LIB) $(STB_TRUETYPE_OBJ) build/main.o
 	@mkdir -p $(OUTPUT_DIR)
 	@echo "Compiling NDK combo..."
 	$(NDK_CC) -shared \
 		--sysroot=$(NDK_SYSROOT) \
 		build/main.o \
 		build/bridge.o \
+		$(STB_TRUETYPE_OBJ) \
 		-L./build \
 		-L$(SDL3_INSTALL_DIR)/lib \
 		-lSDL3 \
 		-lSDL3_image \
 		-lSDL3_mixer \
 		-lSDL3_ttf \
-		-Wl,--whole-archive -lgc -Wl,--no-whole-archive \
+		-Wl,--whole-archive -lgc -lpcre2 -lxml2 -lyaml -Wl,--no-whole-archive \
 		$(NDK_LIB_DIR)/liblog.so \
 		-landroid \
+		-lz \
 		-o $(OUTPUT_LIB)
 
 	@echo "Copying all SDL3 binaries to output directory..."
@@ -113,6 +141,7 @@ copy_assets:
 	@echo "Copying assets to Android project..."
 	@mkdir -p $(ASSETS_DST)
 	cp -r $(ASSETS_SRC) $(ASSETS_DST)
+	cp -f assets.pack android/app/src/main/assets/assets.pack 2>/dev/null || true
 
 apk: dev copy_assets
 	@echo "Gradle assembleDebug..."
@@ -141,7 +170,8 @@ clean-libs:
 	@echo "Cleaning compiled dependencies..."
 	rm -rf build/sdl3 build/sdl_image build/sdl_mixer build/sdl_ttf
 	rm -rf build/sdl3_install
-	rm -f build/libgc.a
+	rm -f build/libgc.a build/libpcre2.a build/libxml2.a build/libyaml.a
+	rm -f $(STB_TRUETYPE_OBJ)
 
 # The Ultimate Option: Safely cleans everything EXCEPT the massive git download sources.
 # Preserves vcpkg downloads and git clones so you don't face long network delays.
@@ -154,3 +184,22 @@ nuke:
 	@echo "Press Ctrl+C inside 3 seconds to abort..." && sleep 3
 	rm -rf build
 	rm -rf android/.gradle android/app/build
+
+# ------------
+# NOTES: for future release build workflows
+# ------------
+# # What you have now for development
+# copy_assets_dev:
+# 	cp -r assets/* android/app/src/main/assets/
+
+# # What you will use for production release
+# build_assets_pack:
+# 	@# Run your custom GSDL packer tool to generate the binary blob
+# 	gsdl-packer assets/ build/assets.pack
+
+# copy_assets_release: build_assets_pack
+# 	@mkdir -p android/app/src/main/assets/
+# 	cp build/assets.pack android/app/src/main/assets/
+# ------------
+# END release buid workflow NOTES
+# ------------
