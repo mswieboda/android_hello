@@ -11,6 +11,10 @@ def android_log(message : String)
   LibAndroidLog.write(4, "CrystalGame".to_unsafe, ">>> #{message}".to_unsafe)
 end
 
+def alog(msg : String)
+  LibAndroidLog.write(4, "AndroidGameRun".to_unsafe, ">>> #{msg}".to_unsafe)
+end
+
 module AndroidHello
   class Game < GSDL::Game
     def initialize
@@ -18,10 +22,14 @@ module AndroidHello
         title: "hello GSDL",
         width: 0,
         height: 0,
-        fullscreen: true,
+
+        # TODO: might not be android supported, and ignored
+        # i don't notice any difference here
         # high_pixel_density: true,
-        # TODO: use vulkan if supported else, opengl, else nil
-        # renderer_type: :metal,
+
+        # TODO: this crashes without errors, so need to debug it:
+        # logical_width: 360,
+        # logical_height: 800,
       )
     end
 
@@ -31,10 +39,6 @@ module AndroidHello
 
     def self.title_name
       "hello_gsdl"
-    end
-
-    def alog(msg : String)
-      LibAndroidLog.write(4, "AndroidGameRun", ">>> #{msg}".to_unsafe)
     end
 
     def init
@@ -55,11 +59,18 @@ module AndroidHello
   class StartScene < GSDL::Scene
     @text : GSDL::Text
     @sprite : GSDL::Sprite
+    # @texture : GSDL::Texture
+    @frames = 0
 
     def initialize
       super(:start)
 
-      @text = GSDL::Text.new(text: "Testing Sprite and Text", origin: {0.5_f32, 0.5_f32}, color: GSDL::Color::Lime)
+      @text = GSDL::Text.new(
+        text: "Testing Sprite and Text",
+        font_size: 64,
+        origin: {0.5_f32, 0.5_f32},
+        color: GSDL::Color::Lime
+      )
       @text.x = Game.width / 2_f32
       @text.y = @text.height + 256
 
@@ -67,8 +78,7 @@ module AndroidHello
         key: :palm_tree,
         x: Game.width / 2_f32,
         y: Game.height / 2_f32,
-        origin: {0.5_f32, 0.5_f32},
-        source_rect: GSDL::FRect.new(w: 128_f32)
+        origin: {0.5_f32, 0.5_f32}
       )
     end
 
@@ -113,8 +123,6 @@ fun crystal_game_main : Int32
 
   0
 end
-
-# TODO: attempt 4 !!!
 
 # =============================================================================
 # 2. TOP-LEVEL USER CODE

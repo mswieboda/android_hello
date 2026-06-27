@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace 'com.mswieboda.hello'
-    compileSdk 33
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.mswieboda.hello"
@@ -38,4 +38,9 @@ android {
             dependsOn compileCrystal
         }
     }
+}
+
+dependencies {
+    implementation libs.material
+    implementation libs.androidx.core.ktx
 }

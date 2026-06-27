@@ -100,7 +100,7 @@ build/bridge.o: src/bridge.c $(SDL3_LIB)
 		-I$(SDL3_INC) \
 		-o build/bridge.o
 
-build/main.o: src/main.cr
+build/main.o: src/main.cr shard.lock
 	@mkdir -p build
 	@echo "Compiling crystal..."
 	CRYSTAL_PATH="$(CRYSTAL_SRC)/lib_c/$(TARGET):$(CRYSTAL_SRC):$(CURDIR)/lib" \

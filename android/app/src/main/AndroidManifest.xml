@@ -11,6 +11,7 @@
 
     <activity
       android:name="com.mswieboda.hello.MainActivity"
+      android:theme="@style/Theme.GameSDL"
       android:label="hello sdl3.cr"
       android:alwaysRetainTaskState="true"
       android:launchMode="singleInstance"
